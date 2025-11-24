@@ -3,7 +3,7 @@ import {
   Play, Pause, RotateCcw, Mic, MessageCircle, 
   Settings, BookOpen, Languages, ChevronRight, 
   Volume2, CheckCircle, AlertCircle, Loader2,
-  GraduationCap, X, Image as ImageIcon, SkipBack, SkipForward, Square
+  GraduationCap, X, Image as ImageIcon, SkipBack, SkipForward, Square, Send
 } from 'lucide-react';
 
 // --- API Constants & Prompts ---
@@ -14,11 +14,11 @@ Generate a realistic, natural Japanese conversation based on the requested JLPT 
 
 IMPORTANT REQUIREMENTS:
 1. Define EXACTLY 2 characters:
-   - Male character Name: "Kore"
-   - Female character Name: "Puck"
-2. Output a "characters" array defining their gender clearly.
+   - One male character (choose any appropriate Japanese male name)
+   - One female character (choose any appropriate Japanese female name)
+2. Output a "characters" array defining their gender clearly as "male" or "female".
 3. The conversation should sound like real friends or colleagues talking.
-4. CRITICAL: The "speaker" name in the "dialogue" array MUST MATCH EXACTLY "Kore" or "Puck". Do not add honorifics like '-san' in the speaker field.
+4. CRITICAL: The "speaker" name in the "dialogue" array MUST MATCH EXACTLY the names in the "characters" array. Do not add honorifics like '-san' in the speaker field.
 5. Generate EXACTLY 3 quiz questions about the conversation in JLPT style (multiple choice with 4 options).
 
 Output MUST be valid JSON only. No markdown blocks.
@@ -30,12 +30,12 @@ Structure:
   "situation": "Brief description of the situation (English)",
   "situation_th": "Brief description of the situation (Thai translation)",
   "characters": [
-    { "name": "Kore", "gender": "male" },
-    { "name": "Puck", "gender": "female" }
+    { "name": "[Japanese male name]", "gender": "male" },
+    { "name": "[Japanese female name]", "gender": "female" }
   ],
   "dialogue": [
     {
-      "speaker": "Kore", 
+      "speaker": "[Character name from characters array]", 
       "text": "Japanese text (Kanji mixed)",
       "reading": "Hiragana reading",
       "romaji": "Romaji",
@@ -70,11 +70,11 @@ Generate a realistic, natural English conversation based on the requested CEFR l
 
 IMPORTANT REQUIREMENTS:
 1. Define EXACTLY 2 characters:
-   - Male character Name: "Alex"
-   - Female character Name: "Sam"
-2. Output a "characters" array defining their gender clearly.
+   - One male character (choose any appropriate English male name)
+   - One female character (choose any appropriate English female name)
+2. Output a "characters" array defining their gender clearly as "male" or "female".
 3. The conversation should sound like real friends or colleagues talking.
-4. CRITICAL: The "speaker" name in the "dialogue" array MUST MATCH EXACTLY "Alex" or "Sam".
+4. CRITICAL: The "speaker" name in the "dialogue" array MUST MATCH EXACTLY the names in the "characters" array.
 5. Generate EXACTLY 3 quiz questions about the conversation (grammar, vocabulary, comprehension) with multiple choice (4 options).
 
 Output MUST be valid JSON only. No markdown blocks.
@@ -86,12 +86,12 @@ Structure:
   "situation": "Brief description of the situation (English)",
   "situation_th": "Brief description of the situation (Thai translation)",
   "characters": [
-    { "name": "Alex", "gender": "male" },
-    { "name": "Sam", "gender": "female" }
+    { "name": "[English male name]", "gender": "male" },
+    { "name": "[English female name]", "gender": "female" }
   ],
   "dialogue": [
     {
-      "speaker": "Alex", 
+      "speaker": "[Character name from characters array]", 
       "text": "English text",
       "reading": "",
       "romaji": "",
@@ -182,6 +182,16 @@ const App = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [showQuizResults, setShowQuizResults] = useState(false);
   const [quizScore, setQuizScore] = useState(0); 
+  
+  // Chat State
+  const [chatMessages, setChatMessages] = useState([]); // [{role: 'user'|'ai', text: '...'}]
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [showChat, setShowChat] = useState(false); 
+  const [isChatUnlocked, setIsChatUnlocked] = useState(() => {
+    return localStorage.getItem("chat_unlocked") === "true";
+  });
+  const [unlockCode, setUnlockCode] = useState(''); 
 
   // Refs
   const audioRef = useRef(null);
@@ -440,6 +450,63 @@ const App = () => {
     setShowQuizResults(true);
   };
 
+  // --- Chat Logic ---
+  
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || isChatLoading || !conversation) return;
+    
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    
+    // Add user message to chat
+    setChatMessages(prev => [...prev, { role: 'user', text: userMessage }]);
+    setIsChatLoading(true);
+    
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userMessage,
+          conversationData: conversation,
+          targetLanguage,
+          userApiKey: apiKey || undefined
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get response');
+      }
+      
+      const data = await response.json();
+      
+      // Add AI response to chat
+      setChatMessages(prev => [...prev, { role: 'ai', text: data.message }]);
+    } catch (err) {
+      console.error('Chat error:', err);
+      setChatMessages(prev => [...prev, { 
+        role: 'ai', 
+        text: settings.lang === 'th' 
+          ? 'ขออภัย เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง' 
+          : 'Sorry, there was an error. Please try again.' 
+      }]);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
+  const handleUnlockChat = () => {
+    if (unlockCode.trim().toLowerCase() === 'aof') {
+      setIsChatUnlocked(true);
+      localStorage.setItem('chat_unlocked', 'true');
+      setUnlockCode('');
+    } else {
+      alert(settings.lang === 'th' ? 'รหัสไม่ถูกต้อง' : 'Invalid code');
+      setUnlockCode('');
+    }
+  };
+
   const pcmToWav = (base64, sampleRate) => {
     const binaryString = window.atob(base64);
     const len = binaryString.length;
@@ -501,7 +568,7 @@ const App = () => {
             <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-slate-700 shadow-2xl">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Settings className="text-indigo-400" /> Settings
+                        <Settings className="text-green-400" /> Settings
                     </h3>
                     <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white">
                         <X />
@@ -516,18 +583,18 @@ const App = () => {
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
                             placeholder="Enter your API Key (or leave empty)"
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-indigo-500 transition-colors"
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-green-500 transition-colors"
                         />
                         <p className="text-xs text-slate-500 mt-2">
                             💡 You can provide your own API key for full control, or leave it empty to use the shared server key.
-                            <br/>Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-400 hover:underline">Google AI Studio</a>.
+                            <br/>Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-green-400 hover:underline">Google AI Studio</a>.
                         </p>
                     </div>
                 </div>
 
                 <button 
                     onClick={() => setShowSettings(false)}
-                    className="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all"
+                    className="w-full mt-6 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl transition-all"
                 >
                     Save & Close
                 </button>
@@ -545,7 +612,7 @@ const App = () => {
   const renderHome = () => (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 md:space-y-8 animate-in fade-in duration-700 px-4">
       <div className="space-y-3 md:space-y-4">
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-indigo-400 tracking-tight">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-green-400 tracking-tight">
           GenConver<span className="text-slate-100">AI</span>
         </h1>
         <p className="text-slate-400 max-w-md mx-auto text-base md:text-lg px-4">
@@ -564,7 +631,7 @@ const App = () => {
           }}
           className={`flex-1 px-4 sm:px-6 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 text-sm sm:text-base ${
             targetLanguage === 'japanese'
-              ? 'bg-indigo-600 text-white shadow-lg'
+              ? 'bg-green-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -577,7 +644,7 @@ const App = () => {
           }}
           className={`flex-1 px-4 sm:px-6 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 text-sm sm:text-base ${
             targetLanguage === 'english'
-              ? 'bg-indigo-600 text-white shadow-lg'
+              ? 'bg-green-600 text-white shadow-lg'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -601,7 +668,7 @@ const App = () => {
               onClick={() => setSettings(s => ({...s, level: lvl}))}
               className={`p-4 sm:p-5 md:p-6 rounded-xl md:rounded-2xl border-2 transition-all duration-300 ${
                 settings.level === lvl 
-                ? 'border-indigo-500 bg-indigo-500/10 text-indigo-300 shadow-[0_0_20px_rgba(99,102,241,0.3)]' 
+                ? 'border-green-500 bg-green-500/10 text-green-300 shadow-[0_0_20px_rgba(99,102,241,0.3)]' 
                 : 'border-slate-700 bg-slate-800 text-slate-500 hover:border-slate-600 hover:bg-slate-750'
               }`}
             >
@@ -623,7 +690,7 @@ const App = () => {
             onClick={() => setTopicMode('random')}
             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
               topicMode === 'random'
-                ? 'bg-indigo-600 text-white shadow-lg'
+                ? 'bg-green-600 text-white shadow-lg'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -633,7 +700,7 @@ const App = () => {
             onClick={() => setTopicMode('tag')}
             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
               topicMode === 'tag'
-                ? 'bg-indigo-600 text-white shadow-lg'
+                ? 'bg-green-600 text-white shadow-lg'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -643,7 +710,7 @@ const App = () => {
             onClick={() => setTopicMode('custom')}
             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
               topicMode === 'custom'
-                ? 'bg-indigo-600 text-white shadow-lg'
+                ? 'bg-green-600 text-white shadow-lg'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -660,7 +727,7 @@ const App = () => {
                 onClick={() => setSelectedTag(tag.id)}
                 className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all duration-300 ${
                   selectedTag === tag.id
-                    ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.3)]'
+                    ? 'border-green-500 bg-green-500/20 text-green-300 shadow-[0_0_15px_rgba(99,102,241,0.3)]'
                     : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600 hover:bg-slate-800'
                 }`}
               >
@@ -681,7 +748,7 @@ const App = () => {
               placeholder={settings.lang === 'th' 
                 ? 'พิมพ์หัวข้อที่คุณต้องการ เช่น "ที่สนามบิน" หรือ "สั่งกาแฟ"' 
                 : 'Enter your topic, e.g., "At the airport" or "Ordering coffee"'}
-              className="w-full bg-slate-800 border-2 border-slate-700 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-slate-200 placeholder-slate-500 outline-none focus:border-indigo-500 transition-colors"
+              className="w-full bg-slate-800 border-2 border-slate-700 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-slate-200 placeholder-slate-500 outline-none focus:border-green-500 transition-colors"
             />
           </div>
         )}
@@ -690,7 +757,7 @@ const App = () => {
       <button 
         onClick={generateContent}
         disabled={loading}
-        className="group relative px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 bg-linear-to-r from-indigo-600 to-purple-600 text-white text-base sm:text-lg md:text-xl font-bold rounded-full shadow-lg hover:shadow-indigo-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed w-full max-w-xs">
+        className="group relative px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 bg-linear-to-r from-green-600 to-purple-600 text-white text-base sm:text-lg md:text-xl font-bold rounded-full shadow-lg hover:shadow-green-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed w-full max-w-xs">
 
         {loading ? (
           <span className="flex items-center justify-center gap-3">
@@ -714,57 +781,59 @@ const App = () => {
              <h2 className="text-2xl font-bold text-slate-100">
                {conversation.title}
              </h2>
-             <h3 className="text-lg font-medium text-indigo-300 mt-1">
+             <h3 className="text-lg font-medium text-green-300 mt-1">
                {conversation.title_th}
              </h3>
              <p className="text-slate-400 mt-2 text-sm">
                {settings.lang === 'th' ? conversation.situation_th : conversation.situation}
              </p>
            </div>
-           <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-lg text-xs font-bold border border-indigo-500/30">
+           <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-lg text-xs font-bold border border-green-500/30">
               {settings.level}
            </span>
         </div>
 
         {audioUrl ? (
           <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-700/50">
-             <div className="flex items-center gap-4 mb-2">
-                <button onClick={toggleAudio} className="w-10 h-10 flex items-center justify-center rounded-full bg-indigo-500 hover:bg-indigo-600 text-white transition-colors shadow-lg">
-                   {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
-                </button>
-                
-                <div className="flex-1 flex flex-col justify-center">
+             <div className="space-y-3">
+                {/* Row 1: Play button + Speed control */}
+                <div className="flex items-center justify-between gap-4">
+                    <button onClick={toggleAudio} className="w-10 h-10 flex items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors shadow-lg shrink-0">
+                       {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+                    </button>
+                    
+                    <div className="flex items-center gap-2 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
+                       <span className="text-xs text-slate-400">Speed</span>
+                       <select 
+                         value={String(settings.speed)}
+                         onChange={(e) => {
+                           const newSpeed = parseFloat(e.target.value);
+                           setSettings(s => ({...s, speed: newSpeed}));
+                           if(audioRef.current) audioRef.current.playbackRate = newSpeed;
+                         }}
+                         className="bg-transparent text-sm font-bold text-green-400 outline-none cursor-pointer"
+                       >
+                         <option value="0.5">0.5x</option>
+                         <option value="0.75">0.75x</option>
+                         <option value="1">Normal</option>
+                       </select>
+                    </div>
+                </div>
+
+                {/* Row 2: Timeline (full width) */}
+                <div className="flex flex-col">
                    <input 
                      type="range" 
                      min="0" 
                      max={duration} 
                      value={currentTime} 
                      onChange={handleSeek}
-                     className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-indigo-500"
+                     className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-green-500"
                    />
                    <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
                       <span>{formatTime(currentTime)}</span>
                       <span>{formatTime(duration)}</span>
                    </div>
-                </div>
-
-                <div className="flex items-center gap-2 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
-                   <span className="text-xs text-slate-400">Speed</span>
-                   <select 
-                     value={settings.speed}
-                     onChange={(e) => {
-                       const newSpeed = parseFloat(e.target.value);
-                       setSettings(s => ({...s, speed: newSpeed}));
-                       if(audioRef.current) audioRef.current.playbackRate = newSpeed;
-                     }}
-                     className="bg-transparent text-sm font-bold text-indigo-400 outline-none cursor-pointer"
-                   >
-                     <option value="0.5">0.5x</option>
-                     <option value="0.75">0.75x</option>
-                     <option value="1.0">Normal</option>
-                     <option value="1.25">1.25x</option>
-                     <option value="1.5">1.5x</option>
-                   </select>
                 </div>
              </div>
              <audio 
@@ -780,7 +849,7 @@ const App = () => {
              <button 
                onClick={() => generateFullAudio(conversation, charactersData)}
                disabled={isGeneratingAudio}
-               className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-indigo-500/25"
+               className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-green-500/25"
              >
                {isGeneratingAudio ? (
                  <>
@@ -833,7 +902,7 @@ const App = () => {
                  className={`relative max-w-[75%] p-4 rounded-2xl shadow-md transition-all duration-300 border 
                  ${layoutIsLeft ? 'rounded-bl-none' : 'rounded-br-none'}
                  ${isActive 
-                    ? 'ring-2 ring-yellow-400/50 bg-slate-700 border-indigo-400/50 transform scale-[1.01]' 
+                    ? 'ring-2 ring-yellow-400/50 bg-slate-700 border-green-400/50 transform scale-[1.01]' 
                     : 'bg-slate-800 border-slate-700 hover:border-slate-600'
                  }`}
                >
@@ -855,7 +924,7 @@ const App = () => {
 
       <div className="grid md:grid-cols-2 gap-6 pt-8">
          <div className="bg-slate-800/80 p-6 rounded-3xl border border-slate-700">
-            <h3 className="text-indigo-400 font-bold flex items-center gap-2 mb-4">
+            <h3 className="text-green-400 font-bold flex items-center gap-2 mb-4">
                 <BookOpen size={18} /> {settings.lang === 'th' ? "คำศัพท์" : "Vocabulary"}
             </h3>
             <div className="space-y-3 max-h-60 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-600">
@@ -883,10 +952,120 @@ const App = () => {
          </div>
       </div>
 
+      {/* Chat Assistant Section */}
+      <div className="mt-8 bg-slate-800/50 rounded-3xl border border-slate-700 overflow-hidden">
+        <button
+          onClick={() => setShowChat(!showChat)}
+          className="w-full p-4 flex items-center justify-between hover:bg-slate-700/30 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <MessageCircle className="text-green-400" size={20} />
+            <h3 className="text-lg font-bold text-slate-200">
+              {settings.lang === 'th' ? 'ถามคำถามเกี่ยวกับบทสนทนา' : 'Ask About This Conversation'}
+            </h3>
+          </div>
+          <ChevronRight className={`text-slate-400 transition-transform ${showChat ? 'rotate-90' : ''}`} size={20} />
+        </button>
+
+        {showChat && (
+          <div className="p-4 border-t border-slate-700 space-y-4">
+            {!isChatUnlocked ? (
+              // Unlock Code Form
+              <div className="text-center py-8 space-y-4">
+                <div className="text-slate-300 text-sm mb-4">
+                  {settings.lang === 'th' 
+                    ? '🔒 ฟีเจอร์นี้ต้องใส่รหัสเพื่อเปิดใช้งาน' 
+                    : '🔒 This feature requires an unlock code'}
+                </div>
+                <div className="flex gap-2 max-w-sm mx-auto">
+                  <input
+                    type="text"
+                    value={unlockCode}
+                    onChange={(e) => setUnlockCode(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleUnlockChat();
+                      }
+                    }}
+                    placeholder={settings.lang === 'th' ? 'ใส่รหัส...' : 'Enter code...'}
+                    className="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-500 outline-none focus:border-green-500 transition-colors text-sm text-center"
+                  />
+                  <button
+                    onClick={handleUnlockChat}
+                    className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-colors font-medium"
+                  >
+                    {settings.lang === 'th' ? 'ยืนยัน' : 'Unlock'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // Chat Interface
+              <>
+                {/* Chat Messages */}
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+                  {chatMessages.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-sm">
+                      {settings.lang === 'th' 
+                        ? 'ถามคำถามเกี่ยวกับคำศัพท์ ไวยากรณ์ หรือสิ่งใดก็ได้ในบทสนทนานี้' 
+                        : 'Ask questions about vocabulary, grammar, or anything in this conversation'}
+                    </div>
+                  ) : (
+                    chatMessages.map((msg, idx) => (
+                      <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[80%] p-3 rounded-xl ${
+                          msg.role === 'user'
+                            ? 'bg-green-600 text-white rounded-br-none'
+                            : 'bg-slate-700 text-slate-100 rounded-bl-none'
+                        }`}>
+                          <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  {isChatLoading && (
+                    <div className="flex justify-start">
+                      <div className="bg-slate-700 text-slate-100 p-3 rounded-xl rounded-bl-none">
+                        <Loader2 className="animate-spin" size={16} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Chat Input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendChatMessage();
+                      }
+                    }}
+                    placeholder={settings.lang === 'th' ? 'พิมพ์คำถามของคุณ...' : 'Type your question...'}
+                    className="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-500 outline-none focus:border-green-500 transition-colors text-sm"
+                    disabled={isChatLoading}
+                  />
+                  <button
+                    onClick={sendChatMessage}
+                    disabled={!chatInput.trim() || isChatLoading}
+                    className="px-4 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Send size={18} />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50 pointer-events-none">
           <button 
             onClick={startQuiz}
-            className="pointer-events-auto flex items-center gap-3 bg-indigo-500 hover:bg-indigo-400 text-white px-8 py-4 rounded-full shadow-2xl shadow-indigo-900/50 transition-all hover:scale-105 font-bold text-lg"
+            className="pointer-events-auto flex items-center gap-3 bg-green-500 hover:bg-green-400 text-white px-8 py-4 rounded-full shadow-2xl shadow-green-900/50 transition-all hover:scale-105 font-bold text-lg"
           >
             <GraduationCap size={24} />
             {settings.lang === 'th' ? 'ทำแบบทดสอบ' : 'Take Quiz'}
@@ -904,7 +1083,7 @@ const App = () => {
       // Results view
       return (
         <div className="max-w-2xl mx-auto text-center space-y-6 md:space-y-8 animate-in zoom-in duration-500 pb-10 px-4">
-          <div className="inline-block p-1 rounded-full bg-linear-to-r from-indigo-500 to-purple-500">
+          <div className="inline-block p-1 rounded-full bg-linear-to-r from-green-500 to-purple-500">
             <div className="bg-slate-900 rounded-full w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 flex items-center justify-center border-4 border-transparent">
               <span className="text-4xl sm:text-4xl md:text-5xl font-black text-white">{quizScore}</span>
             </div>
@@ -960,7 +1139,7 @@ const App = () => {
             <button onClick={() => setMode('home')} className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-full border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm sm:text-base">
               {settings.lang === 'th' ? 'หน้าหลัก' : 'Home'}
             </button>
-            <button onClick={() => setMode('learn')} className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 text-sm sm:text-base">
+            <button onClick={() => setMode('learn')} className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-full bg-green-600 text-white hover:bg-green-500 text-sm sm:text-base">
               {settings.lang === 'th' ? 'ดูบทเรียนอีกครั้ง' : 'Review Lesson'}
             </button>
           </div>
@@ -981,14 +1160,14 @@ const App = () => {
             <span>{Math.round(progress)}%</span>
           </div>
           <div className="w-full bg-slate-700 rounded-full h-2">
-            <div className="bg-indigo-500 h-2 rounded-full transition-all" style={{width: `${progress}%`}}></div>
+            <div className="bg-green-500 h-2 rounded-full transition-all" style={{width: `${progress}%`}}></div>
           </div>
         </div>
 
         {/* Question Card */}
         <div className="bg-slate-800 rounded-2xl md:rounded-3xl border border-slate-700 p-5 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
           <div className="space-y-2">
-            <div className="text-xs sm:text-sm font-bold text-indigo-400 uppercase tracking-wide">
+            <div className="text-xs sm:text-sm font-bold text-green-400 uppercase tracking-wide">
               {settings.lang === 'th' ? 'คำถาม' : 'Question'}
             </div>
             <h3 className="text-xl sm:text-2xl font-bold text-slate-100">{currentQuestion.question_ja}</h3>
@@ -1005,7 +1184,7 @@ const App = () => {
                 onClick={() => handleAnswerSelect(currentQuestionIndex, idx)}
                 className={`w-full text-left p-3 sm:p-4 rounded-xl border-2 transition-all text-sm sm:text-base ${
                   userAnswers[currentQuestionIndex] === idx
-                    ? 'border-indigo-500 bg-indigo-500/20 text-indigo-200'
+                    ? 'border-green-500 bg-green-500/20 text-green-200'
                     : 'border-slate-600 bg-slate-900/50 text-slate-300 hover:border-slate-500 hover:bg-slate-800'
                 }`}
               >
@@ -1030,7 +1209,7 @@ const App = () => {
             <button
               onClick={() => setCurrentQuestionIndex(currentQuestionIndex + 1)}
               disabled={userAnswers[currentQuestionIndex] === null}
-              className="px-6 sm:px-8 py-2.5 sm:py-3 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-30 disabled:cursor-not-allowed font-bold text-sm sm:text-base"
+              className="px-6 sm:px-8 py-2.5 sm:py-3 rounded-full bg-green-600 text-white hover:bg-green-500 disabled:opacity-30 disabled:cursor-not-allowed font-bold text-sm sm:text-base"
             >
               {settings.lang === 'th' ? 'ถัดไป' : 'Next'}
             </button>
@@ -1053,12 +1232,15 @@ const App = () => {
   // --- Main Render ---
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-200 font-sans selection:bg-indigo-500/30">
+    <div className="min-h-screen bg-slate-900 text-slate-200 font-sans selection:bg-green-500/30">
        <nav className="border-b border-slate-800 bg-slate-900/80 backdrop-blur fixed top-0 w-full z-50">
           <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-             <div onClick={() => setMode('home')} className="flex items-center gap-2 font-bold text-xl cursor-pointer text-indigo-400 hover:text-indigo-300 transition-colors">
-                <MessageCircle className="fill-current" />
-                <span>GenConver<span className="text-slate-100">AI</span></span>
+             <div onClick={() => setMode('home')} className="flex items-center gap-2 cursor-pointer group">
+                <MessageCircle className="text-green-400 group-hover:text-green-300 transition-colors fill-current" size={32} />
+                <div className="flex flex-col">
+                    <span className="font-bold text-xl text-green-400 group-hover:text-green-300 transition-colors leading-none">GenConver<span className="text-slate-100">AI</span></span>
+                    <span className="text-[10px] text-slate-500 font-medium">Created by Siravich Boonyuen</span>
+                </div>
              </div>
                           <div className="flex items-center gap-4">
                 <button onClick={() => setShowSettings(true)} className="p-2 text-slate-500 hover:text-slate-200 transition-colors">
