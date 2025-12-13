@@ -535,6 +535,31 @@ const App = () => {
 
   // --- Interaction Logic ---
   
+  const handleJumpToDialogue = (index) => {
+    if (!audioRef.current || !conversation || !duration) return;
+
+    const totalChars = conversation.dialogue.reduce((acc, line) => acc + line.text.length, 0);
+    let charsBefore = 0;
+    for (let i = 0; i < index; i++) {
+        charsBefore += conversation.dialogue[i].text.length;
+    }
+
+    // Calculate approximate time
+    const targetTime = (charsBefore / totalChars) * duration;
+    
+    // Seek
+    audioRef.current.currentTime = targetTime;
+    setCurrentTime(targetTime);
+    
+    // Auto-play if not playing? Let's stick to current state for now, 
+    // or arguably if user clicks, they might want to hear it. 
+    // Let's ensure it plays if it was paused to give immediate feedback.
+    if (!isPlaying) {
+        audioRef.current.play();
+        setIsPlaying(true);
+    }
+  };
+
   const handleSeek = (e) => {
     const time = parseFloat(e.target.value);
     if (audioRef.current) {
@@ -564,37 +589,37 @@ const App = () => {
   const renderSettingsModal = () => {
     if (!showSettings) return null;
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-slate-700 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
+            <div className="modal-glass rounded-2xl p-6 w-full max-w-md">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Settings className="text-green-400" /> Settings
+                        <Settings className="text-emerald-400" /> Settings
                     </h3>
-                    <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white">
+                    <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white transition-colors">
                         <X />
                     </button>
                 </div>
                 
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-slate-400 mb-1">Gemini API Key (Optional)</label>
+                        <label className="block text-sm font-medium text-emerald-300/70 mb-1">Gemini API Key (Optional)</label>
                         <input 
                             type="password" 
                             value={apiKey}
                             onChange={(e) => setApiKey(e.target.value)}
                             placeholder="Enter your API Key (or leave empty)"
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-slate-200 outline-none focus:border-green-500 transition-colors"
+                            className="input-glow w-full rounded-lg px-4 py-3 text-slate-200 outline-none"
                         />
                         <p className="text-xs text-slate-500 mt-2">
                             💡 You can provide your own API key for full control, or leave it empty to use the shared server key.
-                            <br/>Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-green-400 hover:underline">Google AI Studio</a>.
+                            <br/>Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline">Google AI Studio</a>.
                         </p>
                     </div>
                 </div>
 
                 <button 
                     onClick={() => setShowSettings(false)}
-                    className="w-full mt-6 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl transition-all"
+                    className="btn-3d w-full mt-6 text-white font-bold py-3 rounded-xl"
                 >
                     Save & Close
                 </button>
@@ -612,10 +637,11 @@ const App = () => {
   const renderHome = () => (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 md:space-y-8 animate-in fade-in duration-700 px-4">
       <div className="space-y-3 md:space-y-4">
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-green-400 tracking-tight">
-          GenConver<span className="text-slate-100">AI</span>
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight animate-float">
+          <span className="bg-gradient-to-r from-emerald-400 via-emerald-300 to-teal-400 bg-clip-text text-transparent drop-shadow-lg">GenConver</span>
+          <span className="text-slate-100">AI</span>
         </h1>
-        <p className="text-slate-400 max-w-md mx-auto text-base md:text-lg px-4">
+        <p className="text-emerald-200/60 max-w-md mx-auto text-base md:text-lg px-4">
           {settings.lang === 'th' 
             ? (targetLanguage === 'japanese' ? 'ฝึกบทสนทนาภาษาญี่ปุ่นอย่างเป็นธรรมชาติ' : 'ฝึกบทสนทนาภาษาอังกฤษอย่างเป็นธรรมชาติ')
             : (targetLanguage === 'japanese' ? 'Master Japanese Conversation Naturally' : 'Master English Conversation Naturally')}
@@ -623,7 +649,7 @@ const App = () => {
       </div>
 
       {/* Language Selector */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full max-w-md bg-slate-800/50 p-1 rounded-xl border border-slate-700">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full max-w-md glass-card p-1 rounded-xl">
         <button
           onClick={() => {
             setTargetLanguage('japanese');
@@ -631,8 +657,8 @@ const App = () => {
           }}
           className={`flex-1 px-4 sm:px-6 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 text-sm sm:text-base ${
             targetLanguage === 'japanese'
-              ? 'bg-green-600 text-white shadow-lg'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-900/50'
+              : 'text-emerald-200/60 hover:text-emerald-100'
           }`}
         >
           🇯🇵 {settings.lang === 'th' ? 'ภาษาญี่ปุ่น' : 'Japanese'}
@@ -644,8 +670,8 @@ const App = () => {
           }}
           className={`flex-1 px-4 sm:px-6 py-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 text-sm sm:text-base ${
             targetLanguage === 'english'
-              ? 'bg-green-600 text-white shadow-lg'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-900/50'
+              : 'text-emerald-200/60 hover:text-emerald-100'
           }`}
         >
           🇬🇧 {settings.lang === 'th' ? 'ภาษาอังกฤษ' : 'English'}
@@ -666,10 +692,10 @@ const App = () => {
             <button
               key={lvl}
               onClick={() => setSettings(s => ({...s, level: lvl}))}
-              className={`p-4 sm:p-5 md:p-6 rounded-xl md:rounded-2xl border-2 transition-all duration-300 ${
+              className={`level-card p-4 sm:p-5 md:p-6 rounded-xl md:rounded-2xl ${
                 settings.level === lvl 
-                ? 'border-green-500 bg-green-500/10 text-green-300 shadow-[0_0_20px_rgba(99,102,241,0.3)]' 
-                : 'border-slate-700 bg-slate-800 text-slate-500 hover:border-slate-600 hover:bg-slate-750'
+                ? 'active text-emerald-300' 
+                : 'text-emerald-200/50'
               }`}
             >
               <div className="text-lg sm:text-xl md:text-2xl font-bold">{lvl}</div>
@@ -680,18 +706,18 @@ const App = () => {
 
       {/* Topic Selection */}
       <div className="w-full max-w-2xl space-y-3 md:space-y-4 px-2">
-        <h3 className="text-xs sm:text-sm font-bold text-slate-300 uppercase tracking-wide text-center">
+        <h3 className="text-xs sm:text-sm font-bold text-emerald-300/80 uppercase tracking-wide text-center">
           {settings.lang === 'th' ? 'เลือกหัวข้อบทสนทนา' : 'Select Conversation Topic'}
         </h3>
         
         {/* Mode Selection Tabs */}
-        <div className="flex gap-2 bg-slate-800/50 p-1 rounded-xl border border-slate-700">
+        <div className="flex gap-2 glass-card p-1 rounded-xl">
           <button
             onClick={() => setTopicMode('random')}
             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
               topicMode === 'random'
-                ? 'bg-green-600 text-white shadow-lg'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-900/50'
+                : 'text-emerald-200/60 hover:text-emerald-100'
             }`}
           >
             🎲 {settings.lang === 'th' ? 'สุ่ม' : 'Random'}
@@ -700,8 +726,8 @@ const App = () => {
             onClick={() => setTopicMode('tag')}
             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
               topicMode === 'tag'
-                ? 'bg-green-600 text-white shadow-lg'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-900/50'
+                : 'text-emerald-200/60 hover:text-emerald-100'
             }`}
           >
             🏷️ {settings.lang === 'th' ? 'หมวดหมู่' : 'Categories'}
@@ -710,8 +736,8 @@ const App = () => {
             onClick={() => setTopicMode('custom')}
             className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all ${
               topicMode === 'custom'
-                ? 'bg-green-600 text-white shadow-lg'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-900/50'
+                : 'text-emerald-200/60 hover:text-emerald-100'
             }`}
           >
             ✏️ {settings.lang === 'th' ? 'กำหนดเอง' : 'Custom'}
@@ -725,10 +751,10 @@ const App = () => {
               <button
                 key={tag.id}
                 onClick={() => setSelectedTag(tag.id)}
-                className={`p-3 sm:p-4 rounded-lg sm:rounded-xl border-2 transition-all duration-300 ${
+                className={`category-card p-3 sm:p-4 rounded-lg sm:rounded-xl ${
                   selectedTag === tag.id
-                    ? 'border-green-500 bg-green-500/20 text-green-300 shadow-[0_0_15px_rgba(99,102,241,0.3)]'
-                    : 'border-slate-700 bg-slate-800/50 text-slate-400 hover:border-slate-600 hover:bg-slate-800'
+                    ? 'selected text-emerald-300'
+                    : 'text-emerald-200/60'
                 }`}
               >
                 <div className="text-2xl sm:text-3xl mb-1 sm:mb-2">{tag.emoji}</div>
@@ -748,7 +774,7 @@ const App = () => {
               placeholder={settings.lang === 'th' 
                 ? 'พิมพ์หัวข้อที่คุณต้องการ เช่น "ที่สนามบิน" หรือ "สั่งกาแฟ"' 
                 : 'Enter your topic, e.g., "At the airport" or "Ordering coffee"'}
-              className="w-full bg-slate-800 border-2 border-slate-700 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-slate-200 placeholder-slate-500 outline-none focus:border-green-500 transition-colors"
+              className="input-glow w-full rounded-lg sm:rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-slate-200 placeholder-emerald-200/30"
             />
           </div>
         )}
@@ -757,7 +783,7 @@ const App = () => {
       <button 
         onClick={generateContent}
         disabled={loading}
-        className="group relative px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 bg-linear-to-r from-green-600 to-purple-600 text-white text-base sm:text-lg md:text-xl font-bold rounded-full shadow-lg hover:shadow-green-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed w-full max-w-xs">
+        className="group relative px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 btn-3d text-white text-base sm:text-lg md:text-xl font-bold rounded-full disabled:opacity-50 disabled:cursor-not-allowed w-full max-w-xs animate-pulse-glow">
 
         {loading ? (
           <span className="flex items-center justify-center gap-3">
@@ -774,97 +800,26 @@ const App = () => {
 
   const renderLearn = () => (
     <div className="max-w-4xl mx-auto space-y-8 pb-24">
-      <div className="bg-slate-800/50 backdrop-blur-sm rounded-3xl p-6 border border-slate-700 shadow-xl">
+      <div className="glass-card rounded-3xl p-6">
         <div className="flex justify-between items-start mb-6">
            <div>
              {/* Dual Language Title */}
              <h2 className="text-2xl font-bold text-slate-100">
                {conversation.title}
              </h2>
-             <h3 className="text-lg font-medium text-green-300 mt-1">
+             <h3 className="text-lg font-medium text-emerald-300 mt-1">
                {conversation.title_th}
              </h3>
-             <p className="text-slate-400 mt-2 text-sm">
+             <p className="text-emerald-200/50 mt-2 text-sm">
                {settings.lang === 'th' ? conversation.situation_th : conversation.situation}
              </p>
            </div>
-           <span className="px-3 py-1 bg-green-500/20 text-green-300 rounded-lg text-xs font-bold border border-green-500/30">
+           <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 rounded-lg text-xs font-bold border border-emerald-500/30 shadow-lg shadow-emerald-900/20">
               {settings.level}
            </span>
         </div>
 
-        {audioUrl ? (
-          <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-700/50">
-             <div className="space-y-3">
-                {/* Row 1: Play button + Speed control */}
-                <div className="flex items-center justify-between gap-4">
-                    <button onClick={toggleAudio} className="w-10 h-10 flex items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors shadow-lg shrink-0">
-                       {isPlaying ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
-                    </button>
-                    
-                    <div className="flex items-center gap-2 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
-                       <span className="text-xs text-slate-400">Speed</span>
-                       <select 
-                         value={String(settings.speed)}
-                         onChange={(e) => {
-                           const newSpeed = parseFloat(e.target.value);
-                           setSettings(s => ({...s, speed: newSpeed}));
-                           if(audioRef.current) audioRef.current.playbackRate = newSpeed;
-                         }}
-                         className="bg-transparent text-sm font-bold text-green-400 outline-none cursor-pointer"
-                       >
-                         <option value="0.5">0.5x</option>
-                         <option value="0.75">0.75x</option>
-                         <option value="1">Normal</option>
-                       </select>
-                    </div>
-                </div>
 
-                {/* Row 2: Timeline (full width) */}
-                <div className="flex flex-col">
-                   <input 
-                     type="range" 
-                     min="0" 
-                     max={duration} 
-                     value={currentTime} 
-                     onChange={handleSeek}
-                     className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-green-500"
-                   />
-                   <div className="flex justify-between text-[10px] text-slate-500 mt-1 font-mono">
-                      <span>{formatTime(currentTime)}</span>
-                      <span>{formatTime(duration)}</span>
-                   </div>
-                </div>
-             </div>
-             <audio 
-               ref={audioRef} 
-               src={audioUrl} 
-               className="hidden" 
-               onCanPlay={enforceSpeed} 
-             />
-          </div>
-
-        ) : (
-          <div className="flex justify-center py-4">
-             <button 
-               onClick={() => generateFullAudio(conversation, charactersData)}
-               disabled={isGeneratingAudio}
-               className="flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-green-500/25"
-             >
-               {isGeneratingAudio ? (
-                 <>
-                   <Loader2 className="animate-spin" size={20} />
-                   {settings.lang === 'th' ? "กำลังสร้างเสียง..." : "Generating Audio..."}
-                 </>
-               ) : (
-                 <>
-                   <Volume2 size={20} />
-                   {settings.lang === 'th' ? "สร้างเสียงบทสนทนา" : "Generate Audio"}
-                 </>
-               )}
-             </button>
-          </div>
-        )}
       </div>
 
       <div className="space-y-6">
@@ -888,33 +843,33 @@ const App = () => {
           return (
             <div key={idx} className={`flex items-end gap-4 ${layoutIsLeft ? 'flex-row' : 'flex-row-reverse'} group`}>
                <div className="flex flex-col items-center gap-1">
-                 <div className="w-12 h-12 rounded-full bg-slate-700 border-2 border-slate-600 overflow-hidden shrink-0 shadow-lg relative">
+                 <div className="w-12 h-12 rounded-full bg-emerald-900/50 border-2 border-emerald-700/50 overflow-hidden shrink-0 shadow-lg relative">
                     {avatarUrl ? (
                         <img src={avatarUrl} alt={line.speaker} className="w-full h-full object-cover" />
                     ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-500 font-bold text-xs text-center leading-tight p-1">{line.speaker}</div>
+                        <div className="w-full h-full flex items-center justify-center text-emerald-200/50 font-bold text-xs text-center leading-tight p-1">{line.speaker}</div>
                     )}
                  </div>
-                 <span className="text-[10px] font-bold text-slate-500 truncate max-w-[50px]">{line.speaker}</span>
+                 <span className="text-[10px] font-bold text-emerald-200/40 truncate max-w-[50px]">{line.speaker}</span>
                </div>
 
                <div 
-                 className={`relative max-w-[75%] p-4 rounded-2xl shadow-md transition-all duration-300 border 
+                 onClick={() => audioUrl && handleJumpToDialogue(idx)}
+                 className={`chat-bubble relative max-w-[75%] p-4 rounded-2xl 
                  ${layoutIsLeft ? 'rounded-bl-none' : 'rounded-br-none'}
-                 ${isActive 
-                    ? 'ring-2 ring-yellow-400/50 bg-slate-700 border-green-400/50 transform scale-[1.01]' 
-                    : 'bg-slate-800 border-slate-700 hover:border-slate-600'
-                 }`}
+                 ${isActive ? 'active' : ''}
+                 ${audioUrl ? 'cursor-pointer hover:scale-[1.02] active:scale-[0.98]' : ''}
+                 transition-transform duration-200`}
                >
-                  <div className="text-xs text-slate-400 mb-1 opacity-70">{line.reading}</div>
-                  <div className={`text-lg font-medium leading-relaxed ${isActive ? 'text-yellow-300' : 'text-slate-200'}`}>
+                  <div className="text-xs text-emerald-200/40 mb-1">{line.reading}</div>
+                  <div className={`text-lg font-medium leading-relaxed ${isActive ? 'text-emerald-300' : 'text-slate-200'}`}>
                     {line.text}
                   </div>
-                  <div className="text-sm text-slate-500 mt-2 pt-2 border-t border-slate-700/50">
+                  <div className="text-sm text-emerald-200/50 mt-2 pt-2 border-t border-emerald-700/30">
                      {settings.lang === 'th' ? line.th : line.en}
                   </div>
                   {isActive && (
-                    <div className="absolute -top-2 -right-2 w-4 h-4 bg-yellow-500 rounded-full animate-ping" />
+                    <div className="absolute -top-2 -right-2 w-4 h-4 bg-emerald-400 rounded-full animate-ping" />
                   )}
                </div>
             </div>
@@ -923,29 +878,29 @@ const App = () => {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6 pt-8">
-         <div className="bg-slate-800/80 p-6 rounded-3xl border border-slate-700">
-            <h3 className="text-green-400 font-bold flex items-center gap-2 mb-4">
+         <div className="info-card p-6 rounded-3xl">
+            <h3 className="text-emerald-400 font-bold flex items-center gap-2 mb-4">
                 <BookOpen size={18} /> {settings.lang === 'th' ? "คำศัพท์" : "Vocabulary"}
             </h3>
-            <div className="space-y-3 max-h-60 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-600">
+            <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                {conversation.vocabulary.map((v, i) => (
-                  <div key={i} className="flex justify-between text-sm p-2 hover:bg-slate-700/50 rounded-lg">
-                     <span className="text-slate-200 font-medium">{v.word} <span className="text-slate-500 text-xs ml-1">({v.reading})</span></span>
-                     <span className="text-slate-400">{settings.lang === 'th' ? v.meaning_th : v.meaning_en}</span>
+                  <div key={i} className="flex justify-between text-sm p-2 hover:bg-emerald-900/20 rounded-lg transition-colors">
+                     <span className="text-slate-200 font-medium">{v.word} <span className="text-emerald-200/40 text-xs ml-1">({v.reading})</span></span>
+                     <span className="text-emerald-200/60">{settings.lang === 'th' ? v.meaning_th : v.meaning_en}</span>
                   </div>
                ))}
             </div>
          </div>
 
-         <div className="bg-slate-800/80 p-6 rounded-3xl border border-slate-700">
-            <h3 className="text-emerald-400 font-bold flex items-center gap-2 mb-4">
+         <div className="info-card p-6 rounded-3xl">
+            <h3 className="text-teal-400 font-bold flex items-center gap-2 mb-4">
                 <GraduationCap size={18} /> {settings.lang === 'th' ? "ไวยากรณ์" : "Grammar"}
             </h3>
-            <div className="space-y-3 max-h-60 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-600">
+            <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                {conversation.grammar.map((g, i) => (
-                  <div key={i} className="text-sm p-2 bg-slate-900/30 rounded-lg border border-slate-700/50">
-                     <div className="text-emerald-300 font-bold mb-1">{g.point}</div>
-                     <div className="text-slate-400">{settings.lang === 'th' ? g.explanation_th : g.explanation_en}</div>
+                  <div key={i} className="text-sm p-2 glass-card rounded-lg">
+                     <div className="text-teal-300 font-bold mb-1">{g.point}</div>
+                     <div className="text-emerald-200/50">{settings.lang === 'th' ? g.explanation_th : g.explanation_en}</div>
                   </div>
                ))}
             </div>
@@ -953,26 +908,26 @@ const App = () => {
       </div>
 
       {/* Chat Assistant Section */}
-      <div className="mt-8 bg-slate-800/50 rounded-3xl border border-slate-700 overflow-hidden">
+      <div className="mt-8 glass-card rounded-3xl overflow-hidden">
         <button
           onClick={() => setShowChat(!showChat)}
-          className="w-full p-4 flex items-center justify-between hover:bg-slate-700/30 transition-colors"
+          className="w-full p-4 flex items-center justify-between hover:bg-emerald-900/20 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <MessageCircle className="text-green-400" size={20} />
+            <MessageCircle className="text-emerald-400" size={20} />
             <h3 className="text-lg font-bold text-slate-200">
               {settings.lang === 'th' ? 'ถามคำถามเกี่ยวกับบทสนทนา' : 'Ask About This Conversation'}
             </h3>
           </div>
-          <ChevronRight className={`text-slate-400 transition-transform ${showChat ? 'rotate-90' : ''}`} size={20} />
+          <ChevronRight className={`text-emerald-200/40 transition-transform ${showChat ? 'rotate-90' : ''}`} size={20} />
         </button>
 
         {showChat && (
-          <div className="p-4 border-t border-slate-700 space-y-4">
+          <div className="p-4 border-t border-emerald-700/30 space-y-4">
             {!isChatUnlocked ? (
               // Unlock Code Form
               <div className="text-center py-8 space-y-4">
-                <div className="text-slate-300 text-sm mb-4">
+                <div className="text-emerald-200/60 text-sm mb-4">
                   {settings.lang === 'th' 
                     ? '🔒 ฟีเจอร์นี้ต้องใส่รหัสเพื่อเปิดใช้งาน' 
                     : '🔒 This feature requires an unlock code'}
@@ -989,11 +944,11 @@ const App = () => {
                       }
                     }}
                     placeholder={settings.lang === 'th' ? 'ใส่รหัส...' : 'Enter code...'}
-                    className="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-500 outline-none focus:border-green-500 transition-colors text-sm text-center"
+                    className="input-glow flex-1 rounded-xl px-4 py-3 text-slate-200 placeholder-emerald-200/30 text-sm text-center"
                   />
                   <button
                     onClick={handleUnlockChat}
-                    className="px-6 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-colors font-medium"
+                    className="px-6 py-3 btn-3d text-white rounded-xl font-medium"
                   >
                     {settings.lang === 'th' ? 'ยืนยัน' : 'Unlock'}
                   </button>
@@ -1005,7 +960,7 @@ const App = () => {
                 {/* Chat Messages */}
                 <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                   {chatMessages.length === 0 ? (
-                    <div className="text-center py-8 text-slate-400 text-sm">
+                    <div className="text-center py-8 text-emerald-200/40 text-sm">
                       {settings.lang === 'th' 
                         ? 'ถามคำถามเกี่ยวกับคำศัพท์ ไวยากรณ์ หรือสิ่งใดก็ได้ในบทสนทนานี้' 
                         : 'Ask questions about vocabulary, grammar, or anything in this conversation'}
@@ -1015,8 +970,8 @@ const App = () => {
                       <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[80%] p-3 rounded-xl ${
                           msg.role === 'user'
-                            ? 'bg-green-600 text-white rounded-br-none'
-                            : 'bg-slate-700 text-slate-100 rounded-bl-none'
+                            ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-br-none shadow-lg shadow-emerald-900/30'
+                            : 'glass-card text-slate-100 rounded-bl-none'
                         }`}>
                           <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
                         </div>
@@ -1025,8 +980,8 @@ const App = () => {
                   )}
                   {isChatLoading && (
                     <div className="flex justify-start">
-                      <div className="bg-slate-700 text-slate-100 p-3 rounded-xl rounded-bl-none">
-                        <Loader2 className="animate-spin" size={16} />
+                      <div className="glass-card text-slate-100 p-3 rounded-xl rounded-bl-none">
+                        <Loader2 className="animate-spin text-emerald-400" size={16} />
                       </div>
                     </div>
                   )}
@@ -1045,13 +1000,13 @@ const App = () => {
                       }
                     }}
                     placeholder={settings.lang === 'th' ? 'พิมพ์คำถามของคุณ...' : 'Type your question...'}
-                    className="flex-1 bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-500 outline-none focus:border-green-500 transition-colors text-sm"
+                    className="input-glow flex-1 rounded-xl px-4 py-3 text-slate-200 placeholder-emerald-200/30 text-sm"
                     disabled={isChatLoading}
                   />
                   <button
                     onClick={sendChatMessage}
                     disabled={!chatInput.trim() || isChatLoading}
-                    className="px-4 py-3 bg-green-600 hover:bg-green-500 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-3 btn-3d text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Send size={18} />
                   </button>
@@ -1062,14 +1017,86 @@ const App = () => {
         )}
       </div>
 
-      <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50 pointer-events-none">
+      <div className="flex justify-center">
           <button 
             onClick={startQuiz}
-            className="pointer-events-auto flex items-center gap-3 bg-green-500 hover:bg-green-400 text-white px-8 py-4 rounded-full shadow-2xl shadow-green-900/50 transition-all hover:scale-105 font-bold text-lg"
+            className="flex items-center gap-3 px-8 py-4 rounded-full font-bold text-lg glass-card text-emerald-200 hover:text-white hover:bg-emerald-900/30 transition-all"
           >
             <GraduationCap size={24} />
             {settings.lang === 'th' ? 'ทำแบบทดสอบ' : 'Take Quiz'}
           </button>
+      </div>
+
+      <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50 pointer-events-none px-4">
+        {audioUrl ? (
+          <div className="pointer-events-auto glass-card rounded-2xl p-4 w-full max-w-md backdrop-blur-xl border border-emerald-500/30 shadow-2xl shadow-black/50 animate-in slide-in-from-bottom-10 fade-in duration-500">
+             <div className="space-y-3">
+                {/* Row 1: Play button + Speed control */}
+                <div className="flex items-center justify-between gap-4">
+                    <button onClick={toggleAudio} className="w-12 h-12 flex items-center justify-center rounded-full btn-3d text-white shadow-lg shrink-0">
+                       {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-1" />}
+                    </button>
+                    
+                    <div className="flex items-center gap-2 glass-card px-3 py-1.5 rounded-xl bg-black/20">
+                       <span className="text-xs text-emerald-200/60 font-medium">Speed</span>
+                       <select 
+                         value={String(settings.speed)}
+                         onChange={(e) => {
+                           const newSpeed = parseFloat(e.target.value);
+                           setSettings(s => ({...s, speed: newSpeed}));
+                           if(audioRef.current) audioRef.current.playbackRate = newSpeed;
+                         }}
+                         className="bg-transparent text-sm font-bold text-emerald-400 outline-none cursor-pointer"
+                       >
+                         <option value="0.5">0.5x</option>
+                         <option value="0.75">0.75x</option>
+                         <option value="1">Normal</option>
+                       </select>
+                    </div>
+                </div>
+
+                {/* Row 2: Timeline (full width) */}
+                <div className="flex flex-col gap-1">
+                   <input 
+                     type="range" 
+                     min="0" 
+                     max={duration} 
+                     value={currentTime} 
+                     onChange={handleSeek}
+                     className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-slate-700/50 accent-emerald-500"
+                   />
+                   <div className="flex justify-between text-[10px] text-emerald-200/40 font-mono font-medium">
+                      <span>{formatTime(currentTime)}</span>
+                      <span>{formatTime(duration)}</span>
+                   </div>
+                </div>
+             </div>
+             <audio 
+               ref={audioRef} 
+               src={audioUrl} 
+               className="hidden" 
+               onCanPlay={enforceSpeed} 
+             />
+          </div>
+        ) : (
+           <button 
+             onClick={() => generateFullAudio(conversation, charactersData)}
+             disabled={isGeneratingAudio}
+             className="pointer-events-auto flex items-center gap-3 fab-3d text-white px-8 py-4 rounded-full font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 transition-transform"
+           >
+             {isGeneratingAudio ? (
+               <>
+                 <Loader2 className="animate-spin" size={24} />
+                 {settings.lang === 'th' ? "กำลังสร้างเสียง..." : "Generating Audio..."}
+               </>
+             ) : (
+               <>
+                 <Volume2 size={24} />
+                 {settings.lang === 'th' ? "สร้างเสียงบทสนทนา" : "Generate Audio"}
+               </>
+             )}
+           </button>
+        )}
       </div>
     </div>
   );
@@ -1083,8 +1110,8 @@ const App = () => {
       // Results view
       return (
         <div className="max-w-2xl mx-auto text-center space-y-6 md:space-y-8 animate-in zoom-in duration-500 pb-10 px-4">
-          <div className="inline-block p-1 rounded-full bg-linear-to-r from-green-500 to-purple-500">
-            <div className="bg-slate-900 rounded-full w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 flex items-center justify-center border-4 border-transparent">
+          <div className="inline-block p-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 animate-pulse-glow">
+            <div className="score-circle rounded-full w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 flex items-center justify-center">
               <span className="text-4xl sm:text-4xl md:text-5xl font-black text-white">{quizScore}</span>
             </div>
           </div>
@@ -1093,18 +1120,18 @@ const App = () => {
             <h2 className="text-2xl sm:text-3xl font-bold text-white">
               {settings.lang === 'th' ? 'ผลคะแนน' : 'Quiz Results'}
             </h2>
-            <p className="text-slate-400 text-sm sm:text-base">
+            <p className="text-emerald-200/60 text-sm sm:text-base">
               {settings.lang === 'th' 
                 ? `คุณได้ ${quizScore} คะแนน จาก 100 คะแนน!` 
                 : `You scored ${quizScore} out of 100!`}
             </p>
           </div>
 
-          <div className="bg-slate-800 rounded-2xl md:rounded-3xl border border-slate-700 p-4 sm:p-5 md:p-6 space-y-4 sm:space-y-5 md:space-y-6 text-left">
+          <div className="glass-card rounded-2xl md:rounded-3xl p-4 sm:p-5 md:p-6 space-y-4 sm:space-y-5 md:space-y-6 text-left">
             {conversation.quiz.map((q, idx) => {
               const isCorrect = userAnswers[idx] === q.correctAnswer;
               return (
-                <div key={idx} className="pb-6 border-b border-slate-700 last:border-0">
+                <div key={idx} className="pb-6 border-b border-emerald-700/30 last:border-0">
                   <div className="flex items-start gap-3 mb-3">
                     {isCorrect ? (
                       <CheckCircle size={24} className="text-emerald-400 shrink-0 mt-1" />
@@ -1124,7 +1151,7 @@ const App = () => {
                             ✗ {settings.lang === 'th' ? 'คุณตอบ' : 'Your answer'}: {q.options[userAnswers[idx]]}
                           </div>
                         )}
-                        <div className="text-slate-500 mt-2 bg-slate-900/50 p-2 rounded">
+                        <div className="text-emerald-200/50 mt-2 glass-card p-2 rounded">
                           {settings.lang === 'th' ? q.explanation_th : q.explanation_en}
                         </div>
                       </div>
@@ -1136,10 +1163,10 @@ const App = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center pt-4">
-            <button onClick={() => setMode('home')} className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-full border border-slate-600 text-slate-300 hover:bg-slate-800 text-sm sm:text-base">
+            <button onClick={() => setMode('home')} className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-full glass-card text-emerald-200/80 hover:text-white hover:bg-emerald-900/30 text-sm sm:text-base transition-all">
               {settings.lang === 'th' ? 'หน้าหลัก' : 'Home'}
             </button>
-            <button onClick={() => setMode('learn')} className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-full bg-green-600 text-white hover:bg-green-500 text-sm sm:text-base">
+            <button onClick={() => setMode('learn')} className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-full btn-3d text-white text-sm sm:text-base">
               {settings.lang === 'th' ? 'ดูบทเรียนอีกครั้ง' : 'Review Lesson'}
             </button>
           </div>
@@ -1155,23 +1182,23 @@ const App = () => {
       <div className="max-w-3xl mx-auto space-y-4 sm:space-y-6 pb-10 px-4">
         {/* Progress */}
         <div className="space-y-2">
-          <div className="flex justify-between text-xs sm:text-sm text-slate-400">
+          <div className="flex justify-between text-xs sm:text-sm text-emerald-200/60">
             <span>{settings.lang === 'th' ? 'คำถามที่' : 'Question'} {currentQuestionIndex + 1} / {conversation.quiz.length}</span>
             <span>{Math.round(progress)}%</span>
           </div>
-          <div className="w-full bg-slate-700 rounded-full h-2">
-            <div className="bg-green-500 h-2 rounded-full transition-all" style={{width: `${progress}%`}}></div>
+          <div className="progress-bar w-full rounded-full h-2">
+            <div className="progress-fill h-2 rounded-full transition-all" style={{width: `${progress}%`}}></div>
           </div>
         </div>
 
         {/* Question Card */}
-        <div className="bg-slate-800 rounded-2xl md:rounded-3xl border border-slate-700 p-5 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
+        <div className="glass-card rounded-2xl md:rounded-3xl p-5 sm:p-6 md:p-8 space-y-4 sm:space-y-6">
           <div className="space-y-2">
-            <div className="text-xs sm:text-sm font-bold text-green-400 uppercase tracking-wide">
+            <div className="text-xs sm:text-sm font-bold text-emerald-400 uppercase tracking-wide">
               {settings.lang === 'th' ? 'คำถาม' : 'Question'}
             </div>
             <h3 className="text-xl sm:text-2xl font-bold text-slate-100">{currentQuestion.question_ja}</h3>
-            <p className="text-slate-400 text-sm sm:text-base">
+            <p className="text-emerald-200/60 text-sm sm:text-base">
               {settings.lang === 'th' ? currentQuestion.question_th : currentQuestion.question_en}
             </p>
           </div>
@@ -1182,10 +1209,10 @@ const App = () => {
               <button
                 key={idx}
                 onClick={() => handleAnswerSelect(currentQuestionIndex, idx)}
-                className={`w-full text-left p-3 sm:p-4 rounded-xl border-2 transition-all text-sm sm:text-base ${
+                className={`quiz-option w-full text-left p-3 sm:p-4 rounded-xl text-sm sm:text-base ${
                   userAnswers[currentQuestionIndex] === idx
-                    ? 'border-green-500 bg-green-500/20 text-green-200'
-                    : 'border-slate-600 bg-slate-900/50 text-slate-300 hover:border-slate-500 hover:bg-slate-800'
+                    ? 'selected text-emerald-200'
+                    : 'text-emerald-200/70'
                 }`}
               >
                 <span className="font-bold mr-3">{String.fromCharCode(65 + idx)}.</span>
@@ -1200,7 +1227,7 @@ const App = () => {
           <button
             onClick={() => setCurrentQuestionIndex(Math.max(0, currentQuestionIndex - 1))}
             disabled={currentQuestionIndex === 0}
-            className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-full border border-slate-600 text-slate-300 hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed text-sm sm:text-base"
+            className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-full glass-card text-emerald-200/80 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-sm sm:text-base transition-all"
           >
             {settings.lang === 'th' ? 'ก่อนหน้า' : 'Previous'}
           </button>
@@ -1209,7 +1236,7 @@ const App = () => {
             <button
               onClick={() => setCurrentQuestionIndex(currentQuestionIndex + 1)}
               disabled={userAnswers[currentQuestionIndex] === null}
-              className="px-6 sm:px-8 py-2.5 sm:py-3 rounded-full bg-green-600 text-white hover:bg-green-500 disabled:opacity-30 disabled:cursor-not-allowed font-bold text-sm sm:text-base"
+              className="px-6 sm:px-8 py-2.5 sm:py-3 rounded-full btn-3d text-white disabled:opacity-30 disabled:cursor-not-allowed font-bold text-sm sm:text-base"
             >
               {settings.lang === 'th' ? 'ถัดไป' : 'Next'}
             </button>
@@ -1217,7 +1244,7 @@ const App = () => {
             <button
               onClick={submitQuiz}
               disabled={userAnswers.some(a => a === null)}
-              className="px-6 sm:px-8 py-2.5 sm:py-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed font-bold text-sm sm:text-base"
+              className="px-6 sm:px-8 py-2.5 sm:py-3 rounded-full bg-gradient-to-r from-teal-600 to-emerald-600 text-white hover:from-teal-500 hover:to-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed font-bold text-sm sm:text-base shadow-lg shadow-emerald-900/40 transition-all"
             >
               {settings.lang === 'th' ? 'ส่งคำตอบ' : 'Submit Quiz'}
             </button>
@@ -1232,28 +1259,31 @@ const App = () => {
   // --- Main Render ---
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-200 font-sans selection:bg-green-500/30">
-       <nav className="border-b border-slate-800 bg-slate-900/80 backdrop-blur fixed top-0 w-full z-50">
+    <div className="min-h-screen bg-transparent text-slate-200 font-sans selection:bg-emerald-500/30">
+       <nav className="nav-glass fixed top-0 w-full z-50">
           <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
              <div onClick={() => setMode('home')} className="flex items-center gap-2 cursor-pointer group">
-                <MessageCircle className="text-green-400 group-hover:text-green-300 transition-colors fill-current" size={32} />
+                <MessageCircle className="text-emerald-400 group-hover:text-emerald-300 transition-colors fill-current" size={32} />
                 <div className="flex flex-col">
-                    <span className="font-bold text-xl text-green-400 group-hover:text-green-300 transition-colors leading-none">GenConver<span className="text-slate-100">AI</span></span>
-                    <span className="text-[10px] text-slate-500 font-medium">Created by Siravich Boonyuen</span>
+                    <span className="font-bold text-xl leading-none">
+                      <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">GenConver</span>
+                      <span className="text-slate-100">AI</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-200/40 font-medium">Created by Siravich Boonyuen</span>
                 </div>
              </div>
                           <div className="flex items-center gap-4">
-                <button onClick={() => setShowSettings(true)} className="p-2 text-slate-500 hover:text-slate-200 transition-colors">
+                <button onClick={() => setShowSettings(true)} className="p-2 text-emerald-200/50 hover:text-slate-200 transition-colors">
                     <Settings size={20} />
                 </button>
                 <button 
                   onClick={() => setSettings(s => ({...s, lang: s.lang === 'th' ? 'en' : 'th'}))}
-                  className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+                  className="px-3 py-1.5 text-xs rounded-lg glass-card text-emerald-200/60 hover:text-slate-200 transition-colors"
                 >
                   {settings.lang === 'th' ? 'TH' : 'EN'}
                 </button>
                 {mode !== 'home' && (
-                    <button onClick={() => setMode('home')} className="p-2 text-slate-500 hover:text-slate-200 transition-colors">
+                    <button onClick={() => setMode('home')} className="p-2 text-emerald-200/50 hover:text-slate-200 transition-colors">
                         <RotateCcw size={20} />
                     </button>
                 )}
@@ -1263,7 +1293,7 @@ const App = () => {
 
        <main className="max-w-5xl mx-auto px-4 pt-24 pb-10">
           {error && (
-             <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl mb-6 flex items-center gap-3 animate-pulse">
+             <div className="glass-card bg-red-500/10 border-red-500/30 text-red-400 p-4 rounded-2xl mb-6 flex items-center gap-3">
                 <AlertCircle /> {error}
              </div>
           )}
