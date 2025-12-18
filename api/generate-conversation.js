@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { topicPrompt, systemPrompt, userApiKey } = req.body;
+    const { topicPrompt, systemPrompt, userApiKey, model, responseType } = req.body;
 
     // Validate input types and lengths
     if (!topicPrompt || typeof topicPrompt !== 'string' || topicPrompt.trim().length === 0) {
@@ -34,6 +34,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid API key format' });
     }
 
+    // Validate and select model (whitelist approach for security)
+    const allowedModels = ['gemini-3-flash-preview', 'gemini-2.5-flash-preview-09-2025'];
+    const selectedModel = allowedModels.includes(model) ? model : 'gemini-3-flash-preview';
+
     // Use user's API key if provided, otherwise fall back to server key
     const apiKey = userApiKey || process.env.GEMINI_API_KEY;
     
@@ -44,16 +48,21 @@ export default async function handler(req, res) {
       });
     }
 
-    // Call Gemini API
+    // Build generation config based on response type
+    const generationConfig = responseType === 'text' 
+      ? {} // Plain text output
+      : { responseMimeType: 'application/json' }; // JSON output (default)
+
+    // Call Gemini API with selected model
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: topicPrompt }] }],
           systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: { responseMimeType: 'application/json' }
+          generationConfig
         })
       }
     );
