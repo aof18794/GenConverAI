@@ -3,7 +3,7 @@ import {
   Play, Pause, RotateCcw, Mic, MessageCircle, 
   Settings, BookOpen, Languages, ChevronRight, 
   Volume2, CheckCircle, AlertCircle, Loader2,
-  GraduationCap, X, Image as ImageIcon, SkipBack, SkipForward, Square, Send
+  GraduationCap, X, Image as ImageIcon, SkipBack, SkipForward, Square, Send, HelpCircle
 } from 'lucide-react';
 
 // --- API Constants & Prompts ---
@@ -143,7 +143,16 @@ const App = () => {
   const [apiKey, setApiKey] = useState(() => {
     return localStorage.getItem("gemini_api_key") || "";
   });
+  const [selectedModel, setSelectedModel] = useState(() => {
+    return localStorage.getItem("gemini_model") || "gemini-3-flash-preview";
+  });
   const [showSettings, setShowSettings] = useState(false);
+  
+  // Model Options
+  const MODEL_OPTIONS = [
+    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Preview)' },
+    { id: 'gemini-2.5-flash-preview-09-2025', name: 'Gemini 2.5 Flash (Preview)' }
+  ];
 
   // Settings State
   const [settings, setSettings] = useState({
@@ -176,6 +185,7 @@ const App = () => {
   const [duration, setDuration] = useState(0);
   const [activeBubbleIndex, setActiveBubbleIndex] = useState(-1);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const repeatEndTimeRef = useRef(null); // Track when to stop repeating
   
   // Quiz State
   const [userAnswers, setUserAnswers] = useState([null, null, null]); // 3 questions
@@ -193,6 +203,12 @@ const App = () => {
   });
   const [unlockCode, setUnlockCode] = useState(''); 
 
+  // Explanation Dialog State
+  const [showExplanation, setShowExplanation] = useState(false);
+  const [explanationText, setExplanationText] = useState('');
+  const [explanationLine, setExplanationLine] = useState(null);
+  const [isExplaining, setIsExplaining] = useState(false); 
+
   // Refs
   const audioRef = useRef(null);
 
@@ -206,6 +222,11 @@ const App = () => {
       localStorage.removeItem("gemini_api_key");
     }
   }, [apiKey]);
+
+  // Save selected model to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("gemini_model", selectedModel);
+  }, [selectedModel]);
 
   const enforceSpeed = useCallback(() => {
     if (audioRef.current) {
@@ -313,7 +334,8 @@ const App = () => {
         body: JSON.stringify({
           topicPrompt,
           systemPrompt,
-          userApiKey: apiKey || undefined // Send user's key if available
+          userApiKey: apiKey || undefined, // Send user's key if available
+          model: selectedModel // Send selected model
         })
       });
       
@@ -507,6 +529,71 @@ const App = () => {
     }
   };
 
+  // Explain a sentence in detail like a top Japanese teacher
+  const handleExplainSentence = async (line) => {
+    setExplanationLine(line);
+    setShowExplanation(true);
+    setIsExplaining(true);
+    setExplanationText('');
+
+    try {
+      const languageName = targetLanguage === 'japanese' ? 'Japanese' : 'English';
+      const outputLang = settings.lang === 'th' ? 'Thai' : 'English';
+      
+      const prompt = `อธิบายประโยค${languageName === 'Japanese' ? 'ภาษาญี่ปุ่น' : 'ภาษาอังกฤษ'}นี้:
+
+"${line.text}"
+${line.reading ? `(${line.reading})` : ''}
+แปลว่า: ${line.en}
+
+ตอบเป็นภาษา${outputLang === 'Thai' ? 'ไทย' : 'อังกฤษ'} กระชับตรงประเด็น ใช้ format นี้:
+
+[โครงสร้างประโยค]
+อธิบายโครงสร้างไวยากรณ์ของประโยคนี้ 2-3 ประโยค
+
+[คำศัพท์และคันจิ]
+- คำ1 (อ่าน): ความหมาย
+- คำ2 (อ่าน): ความหมาย
+(แยกทุกคำสำคัญพร้อมคันจิถ้ามี)
+
+[ไวยากรณ์]
+อธิบาย grammar patterns ที่ใช้ในประโยคนี้
+
+[ตัวอย่างประโยค]
+1. ประโยค - แปล
+2. ประโยค - แปล
+
+ห้ามใช้ ** หรือ markdown ใช้ [] สำหรับหัวข้อแทน ไม่ต้องมีคำทักทายหรือลงท้าย`;
+
+      const response = await fetch('/api/generate-conversation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topicPrompt: prompt,
+          systemPrompt: `ตอบกระชับ ตรงประเด็น ใช้ [] สำหรับหัวข้อ ห้ามใช้ ** หรือ markdown อื่น ไม่มี intro/outro`,
+          userApiKey: apiKey || undefined,
+          model: selectedModel,
+          responseType: 'text' // Request plain text, not JSON
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get explanation');
+      }
+
+      const data = await response.json();
+      const explanation = data.candidates[0].content.parts[0].text;
+      setExplanationText(explanation);
+    } catch (err) {
+      console.error('Explanation error:', err);
+      setExplanationText(settings.lang === 'th' 
+        ? 'ขออภัย ไม่สามารถอธิบายได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง' 
+        : 'Sorry, unable to explain at the moment. Please try again.');
+    } finally {
+      setIsExplaining(false);
+    }
+  };
+
   const pcmToWav = (base64, sampleRate) => {
     const binaryString = window.atob(base64);
     const len = binaryString.length;
@@ -551,20 +638,76 @@ const App = () => {
     audioRef.current.currentTime = targetTime;
     setCurrentTime(targetTime);
     
-    // Auto-play if not playing? Let's stick to current state for now, 
-    // or arguably if user clicks, they might want to hear it. 
-    // Let's ensure it plays if it was paused to give immediate feedback.
+    // Clear any repeat end time
+    repeatEndTimeRef.current = null;
+    
+    // Auto-play if not playing
     if (!isPlaying) {
         audioRef.current.play();
         setIsPlaying(true);
     }
   };
 
+  // Repeat a single dialogue line
+  const handleRepeatDialogue = (index) => {
+    if (!audioRef.current || !conversation || !duration) return;
+
+    const totalChars = conversation.dialogue.reduce((acc, line) => acc + line.text.length, 0);
+    
+    // Calculate start time
+    let charsBefore = 0;
+    for (let i = 0; i < index; i++) {
+        charsBefore += conversation.dialogue[i].text.length;
+    }
+    const startTime = (charsBefore / totalChars) * duration;
+    
+    // Calculate end time
+    const charsIncluding = charsBefore + conversation.dialogue[index].text.length;
+    const endTime = (charsIncluding / totalChars) * duration;
+    
+    // Set the end time ref
+    repeatEndTimeRef.current = endTime;
+    
+    // Seek to start
+    audioRef.current.currentTime = startTime;
+    setCurrentTime(startTime);
+    
+    // Play
+    audioRef.current.play();
+    audioRef.current.playbackRate = settings.speed;
+    setIsPlaying(true);
+  };
+
+  // Effect to handle stopping at repeat end time
+  useEffect(() => {
+    const checkRepeatEnd = () => {
+      if (repeatEndTimeRef.current !== null && audioRef.current) {
+        if (audioRef.current.currentTime >= repeatEndTimeRef.current) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+          repeatEndTimeRef.current = null;
+        }
+      }
+    };
+    
+    const audioEl = audioRef.current;
+    if (audioEl) {
+      audioEl.addEventListener('timeupdate', checkRepeatEnd);
+    }
+    return () => {
+      if (audioEl) {
+        audioEl.removeEventListener('timeupdate', checkRepeatEnd);
+      }
+    };
+  }, [audioUrl]);
+
   const handleSeek = (e) => {
     const time = parseFloat(e.target.value);
     if (audioRef.current) {
         audioRef.current.currentTime = time;
         setCurrentTime(time);
+        // Clear repeat end time when seeking manually
+        repeatEndTimeRef.current = null;
     }
   };
 
@@ -579,6 +722,8 @@ const App = () => {
           audioRef.current.playbackRate = settings.speed; 
         }
         setIsPlaying(!isPlaying);
+        // Clear repeat end time when toggling
+        repeatEndTimeRef.current = null;
     }
   };
 
@@ -625,6 +770,91 @@ const App = () => {
                 </button>
             </div>
         </div>
+    );
+  };
+
+  // Explanation Dialog
+  const renderExplanationModal = () => {
+    if (!showExplanation) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <div className="modal-glass rounded-2xl p-6 w-full max-w-2xl max-h-[85vh] flex flex-col">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              <GraduationCap className="text-amber-400" /> 
+              {settings.lang === 'th' ? 'อธิบายประโยค' : 'Sentence Explanation'}
+            </h3>
+            <button 
+              onClick={() => setShowExplanation(false)} 
+              className="text-slate-400 hover:text-white transition-colors"
+            >
+              <X />
+            </button>
+          </div>
+          
+          {/* Original sentence */}
+          {explanationLine && (
+            <div className="glass-card rounded-xl p-4 mb-4">
+              <div className="text-xs text-emerald-200/40 mb-1">{explanationLine.reading}</div>
+              <div className="text-lg font-medium text-emerald-300">{explanationLine.text}</div>
+              <div className="text-sm text-slate-400 mt-1">{explanationLine.en}</div>
+            </div>
+          )}
+          
+          {/* Explanation content */}
+          <div className="flex-1 overflow-y-auto">
+            {isExplaining ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="w-10 h-10 text-amber-400 animate-spin mb-4" />
+                <p className="text-emerald-200/60">
+                  {settings.lang === 'th' ? 'กำลังวิเคราะห์ประโยค...' : 'Analyzing sentence...'}
+                </p>
+              </div>
+            ) : (
+              <div className="text-sm leading-relaxed space-y-3">
+                {explanationText.split('\n').map((line, i) => {
+                  // Render [heading] as bold heading
+                  if (line.match(/^\[.+\]$/)) {
+                    return (
+                      <h4 key={i} className="text-emerald-400 font-bold text-base mt-4 mb-2">
+                        {line.replace(/^\[|\]$/g, '')}
+                      </h4>
+                    );
+                  }
+                  // Render - items as list
+                  if (line.trim().startsWith('- ')) {
+                    return (
+                      <div key={i} className="text-slate-200 pl-4">
+                        <span className="text-emerald-400">•</span> {line.trim().substring(2)}
+                      </div>
+                    );
+                  }
+                  // Render numbered items
+                  if (line.trim().match(/^\d+\./)) {
+                    return (
+                      <div key={i} className="text-slate-200 pl-4">
+                        {line.trim()}
+                      </div>
+                    );
+                  }
+                  // Regular paragraph
+                  if (line.trim()) {
+                    return <p key={i} className="text-slate-300">{line}</p>;
+                  }
+                  return null;
+                })}
+              </div>
+            )}
+          </div>
+          
+          <button 
+            onClick={() => setShowExplanation(false)}
+            className="btn-3d w-full mt-4 text-white font-bold py-3 rounded-xl"
+          >
+            {settings.lang === 'th' ? 'ปิด' : 'Close'}
+          </button>
+        </div>
+      </div>
     );
   };
 
@@ -795,6 +1025,22 @@ const App = () => {
           </span>
         )}
       </button>
+
+      {/* Model Selector */}
+      <div className="flex items-center gap-2 text-xs text-emerald-200/50">
+        <span>🤖 {settings.lang === 'th' ? 'โมเดล:' : 'Model:'}</span>
+        <select
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+          className="bg-transparent border border-emerald-500/30 rounded-lg px-2 py-1 text-emerald-300 text-xs cursor-pointer hover:border-emerald-400/50 transition-colors outline-none"
+        >
+          {MODEL_OPTIONS.map(model => (
+            <option key={model.id} value={model.id} className="bg-slate-900 text-emerald-300">
+              {model.name}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 
@@ -871,6 +1117,43 @@ const App = () => {
                   {isActive && (
                     <div className="absolute -top-2 -right-2 w-4 h-4 bg-emerald-400 rounded-full animate-ping" />
                   )}
+                  
+                  {/* Action Buttons Container - Top corner, always visible on mobile */}
+                  <div className={`absolute ${layoutIsLeft ? '-top-2 -left-2' : '-top-2 -right-2'} 
+                    flex gap-1 
+                    opacity-100 md:opacity-0 md:group-hover:opacity-100 
+                    transition-opacity duration-200`}>
+                    
+                    {/* Repeat Button */}
+                    {audioUrl && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRepeatDialogue(idx);
+                        }}
+                        className="w-6 h-6 rounded-full bg-emerald-600 hover:bg-emerald-500 
+                          flex items-center justify-center text-white shadow-md 
+                          hover:scale-110 active:scale-95 transition-transform"
+                        title={settings.lang === 'th' ? 'ฟังซ้ำ' : 'Repeat'}
+                      >
+                        <RotateCcw size={12} />
+                      </button>
+                    )}
+                    
+                    {/* Explain Button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExplainSentence(line);
+                      }}
+                      className="w-6 h-6 rounded-full bg-amber-600 hover:bg-amber-500 
+                        flex items-center justify-center text-white shadow-md 
+                        hover:scale-110 active:scale-95 transition-transform"
+                      title={settings.lang === 'th' ? 'อธิบายประโยคนี้' : 'Explain this sentence'}
+                    >
+                      <HelpCircle size={12} />
+                    </button>
+                  </div>
                </div>
             </div>
           );
@@ -1063,7 +1346,7 @@ const App = () => {
                      max={duration} 
                      value={currentTime} 
                      onChange={handleSeek}
-                     className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-slate-700/50 accent-emerald-500"
+                     className="audio-timeline w-full h-2 rounded-full cursor-pointer"
                    />
                    <div className="flex justify-between text-[10px] text-emerald-200/40 font-mono font-medium">
                       <span>{formatTime(currentTime)}</span>
@@ -1304,6 +1587,7 @@ const App = () => {
        </main>
 
        {renderSettingsModal()}
+       {renderExplanationModal()}
     </div>
   );
 };
