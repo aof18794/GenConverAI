@@ -1,31 +1,25 @@
-// Vercel Serverless Function: Chat with AI about conversation
-// Allows users to ask questions about the current conversation
+import { NextRequest, NextResponse } from 'next/server';
 
-export default async function handler(req, res) {
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+export async function POST(request: NextRequest) {
   try {
-    const { userMessage, conversationData, targetLanguage, userApiKey } = req.body;
+    const { userMessage, conversationData, targetLanguage, userApiKey } = await request.json();
 
     // Validate input
     if (!userMessage || !conversationData) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     if (typeof userMessage !== 'string' || userMessage.length > 1000) {
-      return res.status(400).json({ error: 'Invalid message format or too long' });
+      return NextResponse.json({ error: 'Invalid message format or too long' }, { status: 400 });
     }
 
     if (typeof conversationData !== 'object') {
-      return res.status(400).json({ error: 'Invalid conversation data' });
+      return NextResponse.json({ error: 'Invalid conversation data' }, { status: 400 });
     }
 
     // Validate user API key if provided
     if (userApiKey && (typeof userApiKey !== 'string' || userApiKey.length > 200)) {
-      return res.status(400).json({ error: 'Invalid API key format' });
+      return NextResponse.json({ error: 'Invalid API key format' }, { status: 400 });
     }
 
     // Use user's API key if provided, otherwise fall back to server key
@@ -33,9 +27,9 @@ export default async function handler(req, res) {
     
     if (!apiKey) {
       console.error('No API key available');
-      return res.status(500).json({ 
+      return NextResponse.json({ 
         error: 'No API key configured. Please provide your own API key in settings.' 
-      });
+      }, { status: 500 });
     }
 
     // Build context from conversation
@@ -49,7 +43,7 @@ export default async function handler(req, res) {
     
     // Add dialogue
     contextText += `Dialogue:\n`;
-    conversationData.dialogue?.forEach((line, idx) => {
+    conversationData.dialogue?.forEach((line: { speaker: string; text: string; en?: string; th?: string }, idx: number) => {
       contextText += `${idx + 1}. ${line.speaker}: ${line.text}\n`;
       if (line.en) contextText += `   English: ${line.en}\n`;
       if (line.th) contextText += `   Thai: ${line.th}\n`;
@@ -58,7 +52,7 @@ export default async function handler(req, res) {
     // Add vocabulary
     if (conversationData.vocabulary?.length > 0) {
       contextText += `\n\nVocabulary:\n`;
-      conversationData.vocabulary.forEach((v, idx) => {
+      conversationData.vocabulary.forEach((v: { word: string; reading?: string; meaning_en: string; meaning_th?: string }, idx: number) => {
         contextText += `${idx + 1}. ${v.word}`;
         if (v.reading) contextText += ` (${v.reading})`;
         contextText += ` - ${v.meaning_en}`;
@@ -70,7 +64,7 @@ export default async function handler(req, res) {
     // Add grammar
     if (conversationData.grammar?.length > 0) {
       contextText += `\n\nGrammar Points:\n`;
-      conversationData.grammar.forEach((g, idx) => {
+      conversationData.grammar.forEach((g: { point: string; explanation_en: string }, idx: number) => {
         contextText += `${idx + 1}. ${g.point}\n`;
         contextText += `   ${g.explanation_en}\n`;
       });
@@ -130,17 +124,17 @@ Keep responses concise but informative (2-4 paragraphs maximum).`;
       });
       
       if (response.status === 401 || response.status === 403) {
-        return res.status(401).json({ 
+        return NextResponse.json({ 
           error: 'Invalid API key. Please check your settings.' 
-        });
+        }, { status: 401 });
       } else if (response.status === 429) {
-        return res.status(429).json({ 
+        return NextResponse.json({ 
           error: 'Rate limit exceeded. Please try again later.' 
-        });
+        }, { status: 429 });
       } else {
-        return res.status(500).json({ 
+        return NextResponse.json({ 
           error: 'Failed to get response. Please try again.' 
-        });
+        }, { status: 500 });
       }
     }
 
@@ -149,25 +143,22 @@ Keep responses concise but informative (2-4 paragraphs maximum).`;
     // Validate response
     if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
       console.error('Invalid API response structure');
-      return res.status(500).json({ 
+      return NextResponse.json({ 
         error: 'Invalid response from AI service. Please try again.' 
-      });
+      }, { status: 500 });
     }
 
     const aiResponse = data.candidates[0].content.parts[0].text;
 
-    return res.status(200).json({
+    return NextResponse.json({
       message: aiResponse
     });
 
   } catch (error) {
-    console.error('Server error:', {
-      message: error.message,
-      stack: error.stack
-    });
+    console.error('Server error:', error);
     
-    return res.status(500).json({ 
+    return NextResponse.json({ 
       error: 'An unexpected error occurred. Please try again.' 
-    });
+    }, { status: 500 });
   }
 }

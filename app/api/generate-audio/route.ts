@@ -1,43 +1,50 @@
-// Vercel Serverless Function: Generate Audio
-// Supports both user-provided API keys and server-side fallback
-// Security hardened with input validation and sanitized errors
+import { NextRequest, NextResponse } from 'next/server';
 
-export default async function handler(req, res) {
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+interface Character {
+  name: string;
+  gender: string;
+}
 
+interface DialogueLine {
+  speaker: string;
+  text: string;
+}
+
+interface ConversationData {
+  dialogue: DialogueLine[];
+}
+
+export async function POST(request: NextRequest) {
   try {
-    const { conversationData, charactersData, userApiKey } = req.body;
+    const { conversationData, charactersData, userApiKey } = await request.json();
 
     // Validate input exists
     if (!conversationData || !charactersData) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     // Validate input types
     if (typeof conversationData !== 'object' || typeof charactersData !== 'object') {
-      return res.status(400).json({ error: 'Invalid data format' });
+      return NextResponse.json({ error: 'Invalid data format' }, { status: 400 });
     }
 
     // Validate arrays
     if (!Array.isArray(conversationData.dialogue) || !Array.isArray(charactersData)) {
-      return res.status(400).json({ error: 'Invalid data structure' });
+      return NextResponse.json({ error: 'Invalid data structure' }, { status: 400 });
     }
 
     // Validate reasonable limits
     if (conversationData.dialogue.length > 100) {
-      return res.status(400).json({ error: 'Conversation too long (max 100 lines)' });
+      return NextResponse.json({ error: 'Conversation too long (max 100 lines)' }, { status: 400 });
     }
 
     if (charactersData.length > 10) {
-      return res.status(400).json({ error: 'Too many characters (max 10)' });
+      return NextResponse.json({ error: 'Too many characters (max 10)' }, { status: 400 });
     }
 
     // Validate user API key if provided
     if (userApiKey && (typeof userApiKey !== 'string' || userApiKey.length > 200)) {
-      return res.status(400).json({ error: 'Invalid API key format' });
+      return NextResponse.json({ error: 'Invalid API key format' }, { status: 400 });
     }
 
     // Use user's API key if provided, otherwise fall back to server key
@@ -45,24 +52,24 @@ export default async function handler(req, res) {
     
     if (!apiKey) {
       console.error('No API key available');
-      return res.status(500).json({ 
+      return NextResponse.json({ 
         error: 'No API key configured. Please provide your own API key in settings.' 
-      });
+      }, { status: 500 });
     }
 
-    // Helper functions (same as frontend)
-    const getGender = (speaker, characters) => {
+    // Helper functions
+    const getGender = (speaker: string, characters: Character[]): string => {
       const char = characters.find(c => c.name === speaker);
       return char ? char.gender : 'male';
     };
 
-    const getVoiceName = (gender) => {
+    const getVoiceName = (gender: string): string => {
       return gender.toLowerCase() === 'female' ? 'Puck' : 'Kore';
     };
 
     // Build speaker markup with proper escaping
     let speakerMarkup = '';
-    conversationData.dialogue.forEach((line) => {
+    conversationData.dialogue.forEach((line: DialogueLine) => {
       if (!line.speaker || !line.text) {
         return; // Skip invalid lines
       }
@@ -81,7 +88,7 @@ export default async function handler(req, res) {
     });
 
     // Build voice config
-    const speakerVoiceConfigs = charactersData.map(char => ({
+    const speakerVoiceConfigs = charactersData.map((char: Character) => ({
       speaker: char.name,
       voiceConfig: {
         prebuiltVoiceConfig: {
@@ -113,25 +120,23 @@ export default async function handler(req, res) {
     if (!response.ok) {
       const errorData = await response.json();
       
-      // Log full error server-side for debugging
       console.error('Gemini TTS API error:', {
         status: response.status,
         error: errorData
       });
       
-      // Return sanitized error to client (no details exposed)
       if (response.status === 401 || response.status === 403) {
-        return res.status(401).json({ 
+        return NextResponse.json({ 
           error: 'Invalid API key. Please check your settings.' 
-        });
+        }, { status: 401 });
       } else if (response.status === 429) {
-        return res.status(429).json({ 
+        return NextResponse.json({ 
           error: 'Rate limit exceeded. Please try again later.' 
-        });
+        }, { status: 429 });
       } else {
-        return res.status(500).json({ 
+        return NextResponse.json({ 
           error: 'Failed to generate audio. Please try again.' 
-        });
+        }, { status: 500 });
       }
     }
 
@@ -140,30 +145,24 @@ export default async function handler(req, res) {
     // Validate response
     if (!data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
       console.error('Invalid TTS response structure');
-      return res.status(500).json({ 
+      return NextResponse.json({ 
         error: 'Invalid response from audio service. Please try again.' 
-      });
+      }, { status: 500 });
     }
 
     // Return the audio data
-    // Ensure no newlines in base64 string
     const rawBase64 = data.candidates[0].content.parts[0].inlineData.data;
     const cleanBase64 = rawBase64.replace(/\s/g, '');
     
-    return res.status(200).json({
+    return NextResponse.json({
       audioData: cleanBase64
     });
 
   } catch (error) {
-    // Log full error server-side
-    console.error('Server error:', {
-      message: error.message,
-      stack: error.stack
-    });
+    console.error('Server error:', error);
     
-    // Return generic error to client (no details exposed)
-    return res.status(500).json({ 
+    return NextResponse.json({ 
       error: 'An unexpected error occurred. Please try again.' 
-    });
+    }, { status: 500 });
   }
 }
