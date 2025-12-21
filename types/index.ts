@@ -89,7 +89,7 @@ export type TargetLanguage = 'japanese' | 'english';
 export type TopicMode = 'random' | 'tag' | 'custom';
 
 // App mode type
-export type AppMode = 'home' | 'learn' | 'quiz';
+export type AppMode = 'home' | 'learn' | 'quiz' | 'roleplay';
 
 // English accent type
 export type EnglishAccent = 'american' | 'british' | 'australian';
