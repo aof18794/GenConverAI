@@ -38,6 +38,7 @@ interface HomeViewProps {
   onTestChange: (test: string) => void;
   onTestScoreChange: (score: number) => void;
   onGenerate: () => void;
+  onStartRoleplay: () => void;
 }
 
 export function HomeView({
@@ -64,6 +65,7 @@ export function HomeView({
   onTestChange,
   onTestScoreChange,
   onGenerate,
+  onStartRoleplay,
 }: HomeViewProps) {
   // Helper function to get display label for levels
   const getDisplayLabel = (lvl: string) => {
@@ -429,22 +431,34 @@ export function HomeView({
         )}
       </div>
 
-      <button
-        onClick={onGenerate}
-        disabled={loading}
-        className="group relative px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 btn-3d text-white text-base sm:text-lg md:text-xl font-bold rounded-full disabled:opacity-50 disabled:cursor-not-allowed w-full max-w-xs animate-pulse-glow"
-      >
-        {loading ? (
-          <span className="flex items-center justify-center gap-3">
-            <Loader2 className="animate-spin" /> {loadingText}
-          </span>
-        ) : (
-          <span className="flex items-center justify-center gap-2">
-            {settings.lang === "th" ? "เริ่มฝึกฝน" : "Start Practice"}{" "}
-            <ChevronRight className="group-hover:translate-x-1 transition-transform" />
-          </span>
-        )}
-      </button>
+      <div className="flex flex-col gap-3 w-full max-w-xs">
+        <button
+          onClick={onGenerate}
+          disabled={loading}
+          className="group relative px-6 sm:px-8 md:px-10 py-3 sm:py-4 md:py-5 btn-3d text-white text-base sm:text-lg md:text-xl font-bold rounded-full disabled:opacity-50 disabled:cursor-not-allowed w-full animate-pulse-glow"
+        >
+          {loading ? (
+            <span className="flex items-center justify-center gap-3">
+              <Loader2 className="animate-spin" /> {loadingText}
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-2">
+              {settings.lang === "th" ? "เริ่มฝึกฝน" : "Start Practice"}{" "}
+              <ChevronRight className="group-hover:translate-x-1 transition-transform" />
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={onStartRoleplay}
+          className="px-6 py-3 rounded-full border border-emerald-500/30 hover:bg-emerald-500/10 text-emerald-300 text-sm font-medium transition-all flex items-center justify-center gap-2"
+        >
+          🎙️{" "}
+          {settings.lang === "th"
+            ? "ลองคุยกับ AI (Roleplay)"
+            : "Try AI Roleplay"}
+        </button>
+      </div>
 
       {/* Model Selector */}
       <div className="flex items-center gap-2 text-xs text-emerald-200/50">

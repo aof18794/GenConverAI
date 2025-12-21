@@ -13,6 +13,8 @@ import { QuizView } from "@/components/quiz/QuizView";
 import { useLocalStorageString } from "@/hooks/useLocalStorage";
 import { useAudioPlayer, pcmToWav } from "@/hooks/useAudioPlayer";
 
+import { RoleplayView } from "@/components/roleplay/RoleplayView";
+
 import {
   Settings,
   Conversation,
@@ -571,6 +573,15 @@ ${line.reading ? `(${line.reading})` : ""}
             onTestChange={setSelectedTest}
             onTestScoreChange={setTestScore}
             onGenerate={generateContent}
+            onStartRoleplay={() => setMode("roleplay")}
+          />
+        )}
+
+        {mode === "roleplay" && (
+          <RoleplayView
+            settings={settings}
+            targetLanguage={targetLanguage}
+            onGoHome={() => setMode("home")}
           />
         )}
 
